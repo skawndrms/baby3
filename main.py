@@ -1,66 +1,58 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
 
-# 앱 기본 설정
-st.set_page_config(page_title="성별 출생자 수 시각화", layout="wide")
+# 페이지 기본 설정
+st.set_page_config(page_title="지역별 데이터 시각화", layout="wide")
 
-st.title("👶 시군구별 성별 출생자 수 시각화")
-
-# 데이터 불러오기 (캐싱)
+# 데이터 불러오기 (Streamlit Cloud에서는 같은 디렉토리에 있어야 함)
 @st.cache_data
 def load_data():
-    df = pd.read_csv("행정안전부_지역별(법정동) 성별 출생등록자수_20250831.csv", encoding="euc-kr")
-    df.columns = df.columns.str.strip()
+    df = pd.read_csv("sum_by_region.csv")
     return df
 
 df = load_data()
 
-# 시군구 선택
-if "시군구" not in df.columns:
-    st.error("⚠️ 데이터에 '시군구' 컬럼이 없습니다. CSV 컬럼명을 확인하세요.")
+# 제목
+st.title("📊 지역별 데이터 시각화 대시보드")
+
+# 데이터 미리보기
+with st.expander("데이터 미리보기"):
+    st.dataframe(df, use_container_width=True)
+
+# 사이드바 필터
+st.sidebar.header("필터 설정")
+numeric_cols = df.select_dtypes(include="number").columns.tolist()
+category_cols = df.select_dtypes(exclude="number").columns.tolist()
+
+# 집계 기준 선택 (예: 지역, 시도 등)
+if category_cols:
+    group_col = st.sidebar.selectbox("집계 기준(범주형 열)", category_cols)
 else:
-    regions = df["시군구"].unique()
-    selected_region = st.selectbox("시군구를 선택하세요:", regions)
+    group_col = None
 
-    # 선택된 시군구 데이터 필터링
-    region_df = df[df["시군구"] == selected_region]
+# 수치 열 선택
+if numeric_cols:
+    value_col = st.sidebar.selectbox("시각화할 수치 열", numeric_cols)
+else:
+    value_col = None
 
-    # --- 성별 출생자 수 막대그래프 ---
-    st.subheader(f"📊 {selected_region}의 성별 출생자 수")
-    if {"성별", "출생자수"}.issubset(region_df.columns):
-        fig_bar = px.bar(
-            region_df,
-            x="성별",
-            y="출생자수",
-            color="성별",
-            text="출생자수",
-            labels={"출생자수": "출생자 수", "성별": "성별"},
-            title=f"{selected_region} 성별 출생자 수",
-            template="plotly_white"
-        )
-        fig_bar.update_traces(textposition="outside")
-        st.plotly_chart(fig_bar, use_container_width=True)
-    else:
-        st.warning("⚠️ '성별' 또는 '출생자수' 컬럼이 없어 막대그래프를 그릴 수 없습니다.")
+# 시각화
+if group_col and value_col:
+    st.subheader(f"📍 {group_col}별 {value_col} 시각화")
 
-    # --- 연도별 성별 출생자 수 추이 (라인차트) ---
-    if {"연도", "성별", "출생자수"}.issubset(region_df.columns):
-        st.subheader(f"📈 {selected_region}의 연도별 성별 출생자 수 추이")
-        fig_line = px.line(
-            region_df,
-            x="연도",
-            y="출생자수",
-            color="성별",
-            markers=True,
-            labels={"출생자수": "출생자 수", "연도": "연도", "성별": "성별"},
-            title=f"{selected_region} 연도별 성별 출생자 수 추이",
-            template="plotly_white"
-        )
-        st.plotly_chart(fig_line, use_container_width=True)
-    else:
-        st.info("ℹ️ 데이터에 '연도' 컬럼이 없어 연도별 추이를 표시할 수 없습니다.")
+    grouped = df.groupby(group_col)[value_col].sum().sort_values(ascending=False)
 
-    # --- 데이터 미리보기 ---
-    st.subheader("📋 데이터 미리보기")
+    # 막대 그래프
+    fig, ax = plt.subplots(figsize=(10, 6))
+    grouped.plot(kind="bar", ax=ax)
+    ax.set_ylabel(value_col)
+    ax.set_xlabel(group_col)
+    ax.set_title(f"{group_col}별 {value_col}")
+    st.pyplot(fig)
+
+    # 데이터 테이블
+    st.dataframe(grouped.reset_index(), use_container_width=True)
+else:
+    st.warning("CSV에 범주형 열과 수치 열이 있어야 시각화 가능합니다.")
     st.dataframe(region_df)
