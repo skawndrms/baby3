@@ -51,3 +51,9 @@ if group_col and value_col:
     ax.set_xlabel(group_col)
     ax.set_title(f"{group_col}별 {value_col}")
     st.pyplot(fig)
+
+    # 데이터 테이블
+    st.dataframe(grouped.reset_index(), use_container_width=True)
+else:
+    st.warning("CSV에 범주형 열과 수치 열이 있어야 시각화 가능합니다.")
+    st.dataframe(region_df)
